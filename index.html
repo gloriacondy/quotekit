@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuoteKit — Build your quote plugin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --accent: #FF6B6B;
+    --accent-light: #fff5f5;
+    --bg: #fafafa;
+    --bg2: #ffffff;
+    --border: #ebebeb;
+    --text: #1a1a1a;
+    --muted: #888;
+    --radius: 10px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* NAV */
+  nav { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 32px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .nav-logo { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+  .nav-logo span { color: var(--accent); }
+  .nav-right { display: flex; gap: 10px; align-items: center; }
+
+  /* BUTTONS */
+  .btn { padding: 9px 20px; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; font-family: inherit; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost { background: none; border: 1px solid var(--border); color: var(--text); }
+  .btn-ghost:hover { background: var(--bg); }
+  .btn-full { width: 100%; }
+  .btn-lg { padding: 13px 24px; font-size: 15px; }
+
+  /* SCREENS */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* HERO */
+  .hero { max-width: 680px; margin: 0 auto; padding: 80px 24px 60px; text-align: center; }
+  .hero h1 { font-size: 42px; font-weight: 800; letter-spacing: -1px; line-height: 1.15; margin-bottom: 18px; }
+  .hero h1 span { color: var(--accent); }
+  .hero p { font-size: 18px; color: var(--muted); line-height: 1.6; margin-bottom: 36px; }
+  .hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; max-width: 740px; margin: 60px auto 0; padding: 0 24px; }
+  .feature { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 20px; }
+  .feature-icon { font-size: 24px; margin-bottom: 12px; }
+  .feature h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+  .feature p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  /* AUTH MODAL */
+  .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--bg2); border-radius: 16px; padding: 36px; width: 100%; max-width: 400px; margin: 16px; }
+  .modal h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .modal p { font-size: 14px; color: var(--muted); margin-bottom: 24px; }
+  .modal-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+  .modal-tab { padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; color: var(--muted); background: none; border-top: none; border-left: none; border-right: none; font-family: inherit; }
+  .modal-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* FORMS */
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .field input { width: 100%; padding: 11px 14px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 14px; font-family: inherit; color: var(--text); background: var(--bg); transition: border-color 0.15s; }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .auth-msg { font-size: 13px; margin-top: 12px; text-align: center; padding: 10px; border-radius: 8px; display: none; }
+  .auth-msg.error { background: #fff0f0; color: #cc4444; display: block; }
+  .auth-msg.success { background: #f0fdf4; color: #166534; display: block; }
+
+  /* DASHBOARD */
+  .dashboard { max-width: 960px; margin: 0 auto; padding: 40px 24px; }
+  .dashboard-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; flex-wrap: gap; gap: 12px; }
+  .dashboard-header h2 { font-size: 24px; font-weight: 700; }
+
+  /* BUILDER */
+  .builder { max-width: 1100px; margin: 0 auto; padding: 32px 24px; display: grid; grid-template-columns: 1fr 420px; gap: 24px; align-items: start; }
+  @media (max-width: 820px) { .builder { grid-template-columns: 1fr; } }
+
+  .builder-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 28px; }
+  .builder-panel h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .builder-panel .sub { font-size: 13px; color: var(--muted); margin-bottom: 22px; }
+
+  .step-pills { display: flex; gap: 8px; margin-bottom: 28px; flex-wrap: wrap; }
+  .step-pill { padding: 7px 16px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: none; color: var(--muted); font-family: inherit; transition: all 0.15s; }
+  .step-pill.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .step-pill.done { background: #f0fdf4; color: #166534; border-color: #86efac; }
+
+  .builder-step { display: none; }
+  .builder-step.active { display: block; }
+
+  .color-swatches { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+  .swatch { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: all 0.15s; }
+  .swatch.active { border-color: var(--text); transform: scale(1.15); }
+
+  .services-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .service-row { display: flex; gap: 8px; align-items: center; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
+  .service-row input { border: none; background: none; font-size: 14px; font-family: inherit; color: var(--text); padding: 0; }
+  .service-row input:focus { outline: none; }
+  .service-row input.svc-name { flex: 1; }
+  .service-row input.svc-price { width: 80px; text-align: right; font-weight: 500; }
+  .remove-svc { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 0 2px; }
+  .add-svc { width: 100%; padding: 10px; border: 1px dashed var(--border); border-radius: var(--radius); background: none; font-size: 13px; color: var(--muted); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .add-svc:hover { border-color: var(--accent); color: var(--accent); }
+
+  .size-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 8px; }
+  .size-field { display: flex; flex-direction: column; gap: 6px; }
+  .size-field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .size-field input { padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; color: var(--text); }
+  .size-field input:focus { outline: none; border-color: var(--accent); }
+
+  .builder-actions { display: flex; justify-content: space-between; margin-top: 24px; }
+
+  /* PREVIEW */
+  .preview-sticky { position: sticky; top: 76px; }
+  .preview-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 12px; }
+
+  .plugin-preview { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+  .plugin-preview .p-title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .plugin-preview .p-sub { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .plugin-preview .p-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px; margin-top: 14px; }
+  .p-services { display: flex; flex-direction: column; gap: 6px; }
+  .p-service { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; transition: all 0.15s; }
+  .p-service:hover, .p-service.sel { border-color: var(--preview-accent, #FF6B6B); background: var(--preview-accent-light, #fff5f5); }
+  .p-service .sn { font-weight: 500; }
+  .p-service .sp { color: var(--muted); }
+  .p-sizes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 6px; }
+  .p-size { text-align: center; padding: 9px 6px; border: 1.5px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+  .p-size:hover, .p-size.sel { border-color: var(--preview-accent, #FF6B6B); background: var(--preview-accent-light, #fff5f5); }
+  .p-size .psn { font-size: 13px; font-weight: 600; }
+  .p-size .psd { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .p-email { width: 100%; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; }
+  .p-email:focus { outline: none; border-color: var(--preview-accent, #FF6B6B); }
+  .p-btn { width: 100%; margin-top: 12px; padding: 12px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; color: white; cursor: pointer; font-family: inherit; background: var(--preview-accent, #FF6B6B); transition: opacity 0.15s; }
+  .p-btn:hover { opacity: 0.88; }
+  .p-result { display: none; margin-top: 16px; padding: 16px; background: var(--bg); border-radius: 10px; border: 1px solid var(--border); }
+  .p-result-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+  .p-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .p-total { display: flex; justify-content: space-between; font-size: 14px; font-weight: 700; padding-top: 10px; margin-top: 2px; }
+
+  /* PUBLISH */
+  .publish-box { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-top: 16px; }
+  .publish-box .pb-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .embed-snippet { font-family: monospace; font-size: 12px; color: var(--accent); background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; word-break: break-all; line-height: 1.6; }
+  .copy-btn { margin-top: 10px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg2); font-size: 13px; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+  .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .copied { color: #166534; }
+
+  /* PLUGINS GRID */
+  .plugins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .plugin-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+  .plugin-card h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .plugin-card .pk-sub { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  .plugin-card .pk-key { font-family: monospace; font-size: 11px; color: var(--muted); background: var(--bg); padding: 5px 8px; border-radius: 6px; display: inline-block; margin-bottom: 14px; }
+  .plugin-card-actions { display: flex; gap: 8px; }
+  .empty-state { text-align: center; padding: 60px 24px; color: var(--muted); }
+  .empty-state h3 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 8px; margin-top: 12px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  .alert { padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+  .alert.show { display: block; }
+  .alert-success { background: #f0fdf4; color: #166534; border: 1px solid #86efac; }
+  .alert-error { background: #fff0f0; color: #cc4444; border: 1px solid #ffcccc; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo"><span>Quote</span>Kit</div>
+  <div class="nav-right" id="nav-right">
+    <button class="btn btn-ghost" onclick="openAuth('login')">Log in</button>
+    <button class="btn btn-primary" onclick="openAuth('signup')">Get started free</button>
+  </div>
+  <div class="nav-right" id="nav-authed" style="display:none;">
+    <span id="nav-email" style="font-size:13px;color:var(--muted);"></span>
+    <button class="btn btn-ghost" onclick="signOut()">Sign out</button>
+  </div>
+</nav>
+
+<!-- SCREEN: HERO -->
+<div class="screen active" id="screen-hero">
+  <div class="hero">
+    <h1>Give your clients an<br><span>instant quote.</span></h1>
+    <p>Build a custom price estimator in minutes and embed it on your Squarespace site — no coding needed.</p>
+    <div class="hero-btns">
+      <button class="btn btn-primary btn-lg" onclick="openAuth('signup')">Build your plugin free</button>
+      <button class="btn btn-ghost btn-lg" onclick="openAuth('login')">Log in</button>
+    </div>
+  </div>
+  <div class="features">
+    <div class="feature">
+      <div class="feature-icon">⚡</div>
+      <h3>Instant estimates</h3>
+      <p>Visitors get a real price on the spot — no back and forth needed.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🎨</div>
+      <h3>Fully branded</h3>
+      <p>Match your colors, services, and pricing exactly.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📧</div>
+      <h3>Email delivery</h3>
+      <p>Quotes land in your inbox and your client's inbox automatically.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔌</div>
+      <h3>One-line embed</h3>
+      <p>Paste a single line into Squarespace and you're live.</p>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: DASHBOARD -->
+<div class="screen" id="screen-dashboard">
+  <div class="dashboard">
+    <div class="dashboard-header">
+      <h2>Your plugins</h2>
+      <button class="btn btn-primary" onclick="startBuilder()">+ New plugin</button>
+    </div>
+    <div class="alert alert-success" id="dash-alert"></div>
+    <div id="plugins-container">
+      <div class="empty-state">
+        <div style="font-size:40px;">🔌</div>
+        <h3>No plugins yet</h3>
+        <p>Create your first quote plugin and embed it on your Squarespace site.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN: BUILDER -->
+<div class="screen" id="screen-builder">
+  <div class="builder">
+    <div>
+      <div class="builder-panel">
+        <div class="step-pills">
+          <button class="step-pill active" id="pill-1" onclick="goStep(1)">1. Branding</button>
+          <button class="step-pill" id="pill-2" onclick="goStep(2)">2. Services</button>
+          <button class="step-pill" id="pill-3" onclick="goStep(3)">3. Publish</button>
+        </div>
+
+        <!-- STEP 1: BRANDING -->
+        <div class="builder-step active" id="step-1">
+          <h3>Branding</h3>
+          <div class="sub">Customize how your plugin looks on your site.</div>
+          <div class="field">
+            <label>Plugin name</label>
+            <input type="text" id="b-name" value="Get an Instant Quote" oninput="updatePreview()">
+          </div>
+          <div class="field">
+            <label>Tagline</label>
+            <input type="text" id="b-tagline" value="Select your services to see an estimate right away." oninput="updatePreview()">
+          </div>
+          <div class="field">
+            <label>Button text</label>
+            <input type="text" id="b-btntext" value="Get my quote →" oninput="updatePreview()">
+          </div>
+          <div class="field">
+            <label>Accent color</label>
+            <div class="color-swatches">
+              <div class="swatch active" style="background:#FF6B6B" onclick="setAccent('#FF6B6B','#fff5f5',this)"></div>
+              <div class="swatch" style="background:#5B8DEF" onclick="setAccent('#5B8DEF','#f0f5ff',this)"></div>
+              <div class="swatch" style="background:#1D9E75" onclick="setAccent('#1D9E75','#f0fdf6',this)"></div>
+              <div class="swatch" style="background:#7F77DD" onclick="setAccent('#7F77DD','#f4f3ff',this)"></div>
+              <div class="swatch" style="background:#D85A30" onclick="setAccent('#D85A30','#fff5f0',this)"></div>
+              <div class="swatch" style="background:#1a1a1a" onclick="setAccent('#1a1a1a','#f5f5f5',this)"></div>
+            </div>
+          </div>
+          <div class="builder-actions">
+            <button class="btn btn-ghost" onclick="showScreen('screen-dashboard')">Cancel</button>
+            <button class="btn btn-primary" onclick="goStep(2)">Next: Services →</button>
+          </div>
+        </div>
+
+        <!-- STEP 2: SERVICES -->
+        <div class="builder-step" id="step-2">
+          <h3>Services &amp; pricing</h3>
+          <div class="sub">Add what you offer and set your base prices.</div>
+          <div class="services-list" id="services-list"></div>
+          <button class="add-svc" onclick="addService()">+ Add service</button>
+          <div style="margin-top:24px;">
+            <h3>Project sizes</h3>
+            <div class="sub" style="margin-top:4px;">Set price multipliers for each project size.</div>
+            <div class="size-grid">
+              <div class="size-field">
+                <label>Small ×</label>
+                <input type="number" id="mult-s" value="1" step="0.1" min="0.1" oninput="updatePreview()">
+              </div>
+              <div class="size-field">
+                <label>Medium ×</label>
+                <input type="number" id="mult-m" value="1.5" step="0.1" min="0.1" oninput="updatePreview()">
+              </div>
+              <div class="size-field">
+                <label>Large ×</label>
+                <input type="number" id="mult-l" value="2.2" step="0.1" min="0.1" oninput="updatePreview()">
+              </div>
+            </div>
+          </div>
+          <div class="builder-actions">
+            <button class="btn btn-ghost" onclick="goStep(1)">← Back</button>
+            <button class="btn btn-primary" onclick="saveAndPublish()">Save &amp; publish →</button>
+          </div>
+        </div>
+
+        <!-- STEP 3: PUBLISH -->
+        <div class="builder-step" id="step-3">
+          <h3>Your plugin is live!</h3>
+          <div class="sub">Paste this one line into Squarespace to embed your quote tool.</div>
+          <div class="alert alert-success show" id="publish-success">Plugin saved successfully. Copy the code below.</div>
+          <div class="publish-box">
+            <div class="pb-label">Squarespace → Settings → Advanced → Code Injection → Header</div>
+            <div class="embed-snippet" id="embed-snippet"></div>
+            <button class="copy-btn" id="copy-btn" onclick="copyEmbed()">Copy embed code</button>
+          </div>
+          <div class="publish-box" style="margin-top:12px;">
+            <div class="pb-label">Your unique plugin key</div>
+            <div class="embed-snippet" id="key-display"></div>
+          </div>
+          <div class="builder-actions" style="margin-top:24px;">
+            <button class="btn btn-ghost" onclick="goStep(2)">← Edit</button>
+            <button class="btn btn-primary" onclick="showScreen('screen-dashboard');loadPlugins()">Go to dashboard →</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- LIVE PREVIEW -->
+    <div class="preview-sticky">
+      <div class="preview-label">Live preview</div>
+      <div class="plugin-preview">
+        <div class="p-title" id="pv-title">Get an Instant Quote</div>
+        <div class="p-sub" id="pv-sub">Select your services to see an estimate right away.</div>
+        <div class="p-label">Services needed</div>
+        <div class="p-services" id="pv-services"></div>
+        <div class="p-label">Project size</div>
+        <div class="p-sizes">
+          <div class="p-size" onclick="pvSelectSize(this,0)"><div class="psn">Small</div><div class="psd">1–2 deliverables</div></div>
+          <div class="p-size" onclick="pvSelectSize(this,1)"><div class="psn">Medium</div><div class="psd">A few revisions</div></div>
+          <div class="p-size" onclick="pvSelectSize(this,2)"><div class="psn">Large</div><div class="psd">Complex scope</div></div>
+        </div>
+        <input class="p-email" id="pv-email" type="email" placeholder="Your email address">
+        <button class="p-btn" id="pv-btn" onclick="pvGetQuote()">Get my quote →</button>
+        <div class="p-result" id="pv-result">
+          <div class="p-result-title">Your estimate</div>
+          <div id="pv-lines"></div>
+          <div class="p-total"><span>Total estimate</span><span id="pv-total"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="modal-backdrop" id="auth-modal">
+  <div class="modal">
+    <h2>Welcome to QuoteKit</h2>
+    <p>Build and embed quote plugins on your Squarespace site.</p>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tab-signup" onclick="switchTab('signup')">Sign up</button>
+      <button class="modal-tab" id="tab-login" onclick="switchTab('login')">Log in</button>
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="auth-email" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="auth-password" placeholder="Min. 6 characters">
+    </div>
+    <div class="auth-msg" id="auth-msg"></div>
+    <button class="btn btn-primary btn-full" style="margin-top:8px;" onclick="handleAuth()">Continue</button>
+    <button class="btn btn-ghost btn-full" style="margin-top:8px;" onclick="closeAuth()">Cancel</button>
+  </div>
+</div>
+
+<script>
+// ─── CONFIG — replace these after Supabase setup ───────────────────────────
+const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
+const SUPABASE_KEY  = 'YOUR_SUPABASE_ANON_KEY';
+const DEPLOY_URL    = 'YOUR_VERCEL_URL'; // e.g. https://quotekit.vercel.app
+// ────────────────────────────────────────────────────────────────────────────
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser = null;
+let accentColor  = '#FF6B6B';
+let accentLight  = '#fff5f5';
+let pvSizeIdx    = null;
+let currentKey   = null;
+
+let services = [
+  { name: 'Logo Design',    price: 800  },
+  { name: 'Brand Identity', price: 1500 },
+  { name: 'Copywriting',    price: 600  },
+  { name: 'Website Design', price: 2000 },
+];
+
+// ── AUTH ──────────────────────────────────────────────────────────────────
+function openAuth(tab) {
+  switchTab(tab);
+  document.getElementById('auth-modal').classList.add('open');
+}
+function closeAuth() {
+  document.getElementById('auth-modal').classList.remove('open');
+}
+function switchTab(tab) {
+  document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('auth-modal').dataset.tab = tab;
+  clearAuthMsg();
+}
+function clearAuthMsg() {
+  const m = document.getElementById('auth-msg');
+  m.className = 'auth-msg'; m.textContent = '';
+}
+function showAuthMsg(msg, type) {
+  const m = document.getElementById('auth-msg');
+  m.className = 'auth-msg ' + type; m.textContent = msg;
+}
+
+async function handleAuth() {
+  const email    = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const tab      = document.getElementById('auth-modal').dataset.tab || 'signup';
+  if (!email || !password) return showAuthMsg('Please fill in both fields.', 'error');
+
+  let result;
+  if (tab === 'signup') {
+    result = await sb.auth.signUp({ email, password });
+    if (!result.error) showAuthMsg('Account created! Check your email to confirm.', 'success');
+  } else {
+    result = await sb.auth.signInWithPassword({ email, password });
+  }
+
+  if (result.error) return showAuthMsg(result.error.message, 'error');
+  if (result.data?.user && tab === 'login') {
+    currentUser = result.data.user;
+    closeAuth(); afterLogin();
+  }
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+  currentUser = null;
+  document.getElementById('nav-right').style.display = 'flex';
+  document.getElementById('nav-authed').style.display = 'none';
+  showScreen('screen-hero');
+}
+
+function afterLogin() {
+  document.getElementById('nav-right').style.display = 'none';
+  document.getElementById('nav-authed').style.display = 'flex';
+  document.getElementById('nav-email').textContent = currentUser.email;
+  showScreen('screen-dashboard');
+  loadPlugins();
+}
+
+// ── SCREENS ───────────────────────────────────────────────────────────────
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────
+async function loadPlugins() {
+  if (!currentUser) return;
+  const { data } = await sb.from('plugins').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+  const container = document.getElementById('plugins-container');
+  if (!data || data.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div style="font-size:40px;">🔌</div><h3>No plugins yet</h3><p>Create your first quote plugin and embed it on your Squarespace site.</p></div>`;
+    return;
+  }
+  container.innerHTML = `<div class="plugins-grid">${data.map(p => `
+    <div class="plugin-card">
+      <h4>${p.config.name || 'Quote Plugin'}</h4>
+      <div class="pk-sub">${p.config.services?.length || 0} services · created ${new Date(p.created_at).toLocaleDateString()}</div>
+      <div class="pk-key">${p.license_key}</div>
+      <div class="plugin-card-actions">
+        <button class="btn btn-ghost" style="font-size:13px;padding:7px 14px;" onclick="copyKey('${DEPLOY_URL}/embed.js?key=${p.license_key}')">Copy embed</button>
+        <button class="btn btn-ghost" style="font-size:13px;padding:7px 14px;" onclick="deletePlugin('${p.id}')">Delete</button>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+function copyKey(snippet) {
+  navigator.clipboard.writeText(`<script src="${snippet}"><\/script>`);
+  showDashAlert('Embed code copied to clipboard!');
+}
+
+function showDashAlert(msg) {
+  const a = document.getElementById('dash-alert');
+  a.textContent = msg; a.classList.add('show');
+  setTimeout(() => a.classList.remove('show'), 3000);
+}
+
+async function deletePlugin(id) {
+  if (!confirm('Delete this plugin? It will stop working on any site using it.')) return;
+  await sb.from('plugins').delete().eq('id', id);
+  loadPlugins();
+}
+
+// ── BUILDER ───────────────────────────────────────────────────────────────
+function startBuilder() {
+  services = [
+    { name: 'Logo Design', price: 800 },
+    { name: 'Brand Identity', price: 1500 },
+    { name: 'Copywriting', price: 600 },
+    { name: 'Website Design', price: 2000 },
+  ];
+  currentKey = null;
+  document.getElementById('b-name').value    = 'Get an Instant Quote';
+  document.getElementById('b-tagline').value = 'Select your services to see an estimate right away.';
+  document.getElementById('b-btntext').value = 'Get my quote →';
+  document.getElementById('mult-s').value = '1';
+  document.getElementById('mult-m').value = '1.5';
+  document.getElementById('mult-l').value = '2.2';
+  goStep(1);
+  showScreen('screen-builder');
+  renderServices();
+  updatePreview();
+}
+
+function goStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    document.getElementById('step-' + i).classList.toggle('active', i === n);
+    const pill = document.getElementById('pill-' + i);
+    pill.classList.toggle('active', i === n);
+    pill.classList.toggle('done', i < n);
+  }
+}
+
+// ── SERVICES ──────────────────────────────────────────────────────────────
+function renderServices() {
+  const list = document.getElementById('services-list');
+  list.innerHTML = services.map((s, i) => `
+    <div class="service-row">
+      <input class="svc-name" type="text" value="${s.name}" placeholder="Service name" oninput="services[${i}].name=this.value;renderPvServices()">
+      <span style="color:var(--muted);font-size:13px;">$</span>
+      <input class="svc-price" type="number" value="${s.price}" placeholder="0" oninput="services[${i}].price=parseInt(this.value)||0;renderPvServices()">
+      <button class="remove-svc" onclick="removeService(${i})">×</button>
+    </div>`).join('');
+  renderPvServices();
+}
+
+function addService() {
+  services.push({ name: 'New Service', price: 500 });
+  renderServices();
+}
+
+function removeService(i) {
+  services.splice(i, 1);
+  renderServices();
+}
+
+// ── PREVIEW ───────────────────────────────────────────────────────────────
+function setAccent(hex, light, el) {
+  accentColor = hex; accentLight = light;
+  document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+  el.classList.add('active');
+  document.documentElement.style.setProperty('--preview-accent', hex);
+  document.documentElement.style.setProperty('--preview-accent-light', light);
+}
+
+function updatePreview() {
+  document.getElementById('pv-title').textContent = document.getElementById('b-name')?.value || '';
+  document.getElementById('pv-sub').textContent   = document.getElementById('b-tagline')?.value || '';
+  document.getElementById('pv-btn').textContent   = document.getElementById('b-btntext')?.value || '';
+  document.getElementById('pv-btn').style.background = accentColor;
+  renderPvServices();
+}
+
+function renderPvServices() {
+  const c = document.getElementById('pv-services');
+  c.innerHTML = services.map((s, i) => `
+    <div class="p-service" data-idx="${i}" onclick="this.classList.toggle('sel')">
+      <span class="sn">${s.name}</span>
+      <span class="sp">from $${s.price.toLocaleString()}</span>
+    </div>`).join('');
+}
+
+function pvSelectSize(el, idx) {
+  document.querySelectorAll('.p-size').forEach(s => s.classList.remove('sel'));
+  el.classList.add('sel'); pvSizeIdx = idx;
+}
+
+function pvGetQuote() {
+  const mults = [
+    parseFloat(document.getElementById('mult-s')?.value) || 1,
+    parseFloat(document.getElementById('mult-m')?.value) || 1.5,
+    parseFloat(document.getElementById('mult-l')?.value) || 2.2,
+  ];
+  const mult    = pvSizeIdx !== null ? mults[pvSizeIdx] : 1;
+  const sel     = [...document.querySelectorAll('.p-service.sel')];
+  const targets = sel.length > 0 ? sel : [...document.querySelectorAll('.p-service')];
+  let total = 0, html = '';
+  targets.forEach(el => {
+    const s     = services[parseInt(el.dataset.idx)];
+    const price = Math.round(s.price * mult);
+    total += price;
+    html += `<div class="p-line"><span>${s.name}</span><span>$${price.toLocaleString()}</span></div>`;
+  });
+  document.getElementById('pv-lines').innerHTML = html;
+  document.getElementById('pv-total').textContent = '$' + total.toLocaleString();
+  document.getElementById('pv-result').style.display = 'block';
+}
+
+// ── SAVE & PUBLISH ────────────────────────────────────────────────────────
+async function saveAndPublish() {
+  if (!currentUser) return openAuth('login');
+  const config = {
+    name:     document.getElementById('b-name').value,
+    tagline:  document.getElementById('b-tagline').value,
+    btnText:  document.getElementById('b-btntext').value,
+    accent:   accentColor,
+    accentLight,
+    services: [...services],
+    multipliers: {
+      small:  parseFloat(document.getElementById('mult-s').value) || 1,
+      medium: parseFloat(document.getElementById('mult-m').value) || 1.5,
+      large:  parseFloat(document.getElementById('mult-l').value) || 2.2,
+    }
+  };
+
+  const key = 'qk_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
+  currentKey = key;
+
+  const { error } = await sb.from('plugins').insert({
+    user_id:     currentUser.id,
+    license_key: key,
+    config,
+    active:      true,
+  });
+
+  if (error) { alert('Save failed: ' + error.message); return; }
+
+  const snippet = `<script src="${DEPLOY_URL}/api/embed?key=${key}"><\/script>`;
+  document.getElementById('embed-snippet').textContent = snippet;
+  document.getElementById('key-display').textContent   = key;
+  goStep(3);
+}
+
+function copyEmbed() {
+  const text = document.getElementById('embed-snippet').textContent;
+  navigator.clipboard.writeText(text);
+  const btn = document.getElementById('copy-btn');
+  btn.textContent = 'Copied!';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = 'Copy embed code'; btn.classList.remove('copied'); }, 2000);
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────
+(async () => {
+  const { data } = await sb.auth.getSession();
+  if (data?.session?.user) {
+    currentUser = data.session.user;
+    afterLogin();
+  }
+  document.documentElement.style.setProperty('--preview-accent', accentColor);
+  document.documentElement.style.setProperty('--preview-accent-light', accentLight);
+})();
+</script>
+</body>
+</html>
