@@ -641,7 +641,45 @@ async function saveAndPublish() {
 
   if (error) { alert('Save failed: ' + error.message); return; }
 
-  const snippet = `<script src="${DEPLOY_URL}/api/embed?key=${key}"><\/script>`;
+  async function saveAndPublish() {
+  if (!currentUser) return openAuth('login');
+  const config = {
+    name:     document.getElementById('b-name').value,
+    tagline:  document.getElementById('b-tagline').value,
+    btnText:  document.getElementById('b-btntext').value,
+    accent:   accentColor,
+    accentLight,
+    services: [...services],
+    multipliers: {
+      small:  parseFloat(document.getElementById('mult-s').value) || 1,
+      medium: parseFloat(document.getElementById('mult-m').value) || 1.5,
+      large:  parseFloat(document.getElementById('mult-l').value) || 2.2,
+    }
+  };
+
+  const key = 'qk_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
+  currentKey = key;
+
+  const { error } = await sb.from('plugins').insert({
+    user_id:     currentUser.id,
+    license_key: key,
+    config,
+    active:      true,
+  });
+
+  if (error) { alert('Save failed: ' + error.message); return; }
+
+  // Fetch the fully built script from our API
+  const res    = await fetch(`${DEPLOY_URL}/api/embed?key=${key}`);
+  const script = await res.text();
+
+  // Give customer a self-contained script tag to paste
+  const snippet = `<script>\n${script}\n<\/script>`;
+
+  document.getElementById('embed-snippet').textContent = snippet;
+  document.getElementById('key-display').textContent   = key;
+  goStep(3);
+}
   document.getElementById('embed-snippet').textContent = snippet;
   document.getElementById('key-display').textContent   = key;
   goStep(3);
