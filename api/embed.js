@@ -6,15 +6,12 @@ const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
 export default async function handler(req) {
   const { searchParams } = new URL(req.url);
   const key = searchParams.get('key');
+  const format = searchParams.get('format');
 
-  // No key supplied
   if (!key) {
-    return new Response('/* QuoteKit: no key supplied */', {
-      headers: { 'Content-Type': 'application/javascript' }
-    });
+    return respond(format, null, 'no key supplied');
   }
 
-  // Fetch plugin config from Supabase
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/plugins?license_key=eq.${key}&active=eq.true&select=config&limit=1`,
     {
@@ -28,16 +25,30 @@ export default async function handler(req) {
 
   const data = await res.json();
 
-  // Key not found or inactive
   if (!data || data.length === 0) {
-    return new Response('/* QuoteKit: invalid or inactive key */', {
+    return respond(format, null, 'invalid or inactive key');
+  }
+
+  return respond(format, data[0].config, null);
+}
+
+function respond(format, config, error) {
+  if (format === 'json') {
+    return new Response(JSON.stringify({ config, error }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      }
+    });
+  }
+
+  if (error || !config) {
+    return new Response(`/* QuoteKit: ${error} */`, {
       headers: { 'Content-Type': 'application/javascript' }
     });
   }
 
-  const c = data[0].config;
-
-  // Build the plugin script dynamically from the saved config
+  const c = config;
   const script = `
 (function() {
   var config = ${JSON.stringify(c)};
@@ -91,7 +102,7 @@ export default async function handler(req) {
     '<div class="qk-services">' + servicesHTML + '</div>' +
     '<div class="qk-label">Project size</div>' +
     '<div class="qk-sizes">' +
-      '<div class="qk-size" onclick="qkSelSize(this,0)"><div class="qk-szn">Small</div><div class="qk-szd">1–2 deliverables</div></div>' +
+      '<div class="qk-size" onclick="qkSelSize(this,0)"><div class="qk-szn">Small</div><div class="qk-szd">1-2 deliverables</div></div>' +
       '<div class="qk-size" onclick="qkSelSize(this,1)"><div class="qk-szn">Medium</div><div class="qk-szd">A few revisions</div></div>' +
       '<div class="qk-size" onclick="qkSelSize(this,2)"><div class="qk-szn">Large</div><div class="qk-szd">Complex scope</div></div>' +
     '</div>' +
@@ -106,9 +117,7 @@ export default async function handler(req) {
       '<div class="qk-note">This is an estimate. A full proposal follows after an initial chat.</div>' +
     '</div>';
 
-  document.currentScript
-    ? document.currentScript.insertAdjacentElement('afterend', wrap)
-    : document.body.appendChild(wrap);
+  document.body.appendChild(wrap);
 
   window.qkSelSize = function(el, idx) {
     document.querySelectorAll('.qk-size').forEach(function(s) { s.classList.remove('sel'); });
@@ -135,14 +144,12 @@ export default async function handler(req) {
     var mult  = mults[selectedSize];
     var lines = '';
     var total = 0;
-    var linesTxt = '';
 
     sel.forEach(function(el) {
       var s     = config.services[parseInt(el.dataset.idx)];
       var price = Math.round(s.price * mult);
       total    += price;
       lines    += '<div class="qk-row"><span>' + s.name + '</span><span>$' + price.toLocaleString() + '</span></div>';
-      linesTxt += s.name + ': $' + price.toLocaleString() + '\\n';
     });
 
     document.getElementById('qk-lines').innerHTML = lines;
